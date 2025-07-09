@@ -23,7 +23,13 @@ greenprint() { echo; printf "${GREEN}%s${RESET}\n" "$1"; }
 
 # Проверка наличия аргументов (IP-адрес DNS и разрешённая подсеть)
 if [ -z "$1" ] || [ -z "$2" ]; then
+  errorprint "Ошибка: Не указаны обязательные параметры."
+  echo "Пожалуйста, укажите IP-адрес сервера BIND и разрешённую подсеть."
   echo "Использование: $0 <DNS_IP> <ALLOWED_NET>"
+  echo "Пример: $0 10.100.10.251 10.100.10.0/24"
+  echo "Где:"
+  echo "  <DNS_IP> - IP-адрес сервера BIND"
+  echo "  <ALLOWED_NET> - Разрешённая подсеть для доступа к DNS"
   exit 1
 fi
 
@@ -32,6 +38,11 @@ apt install -y bind9 dnsutils
 
 magentaprint "Настройка /etc/bind/named.conf.options..."
 cat <<EOF > /etc/bind/named.conf.options
+// ACL Data
+acl "ext" { 127.0.0.0/8; };
+acl "int" { 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16; };
+acl "mgmt" { 127.0.0.0/8; 10.100.10.0/24; };
+
 options {
     directory "/var/cache/bind";
     listen-on { any; };
@@ -40,6 +51,11 @@ options {
     dnssec-validation no;
     auth-nxdomain no;
     listen-on-v6 { none; };
+};
+
+// Включение статистики на интерфейсте
+statistics-channels {
+    inet ${DNS_IP} port 80 allow { mgmt; };
 };
 EOF
 
