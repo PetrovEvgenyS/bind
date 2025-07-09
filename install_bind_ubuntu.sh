@@ -6,8 +6,8 @@ set -e
 # Переменные
 ZONE="local"
 ZONE_FILE="/etc/bind/db.${ZONE}"
-DNS_IP="10.100.10.251"        # IP BIND-сервера
-ALLOWED_NET="10.100.10.0/24"  # Разрешённая подсеть
+DNS_IP="$1"              # IP BIND-сервера
+ALLOWED_NET="$2"         # Разрешённая подсеть
 
 ### ЦВЕТА ##
 ESC=$(printf '\033') RESET="${ESC}[0m" MAGENTA="${ESC}[35m" RED="${ESC}[31m" GREEN="${ESC}[32m"
@@ -20,6 +20,12 @@ greenprint() { echo; printf "${GREEN}%s${RESET}\n" "$1"; }
 
 # ----------------------------------------------------------------------------------------------- #
 
+
+# Проверка наличия аргументов (IP-адрес DNS и разрешённая подсеть)
+if [ -z "$1" ] || [ -z "$2" ]; then
+  echo "Использование: $0 <DNS_IP> <ALLOWED_NET>"
+  exit 1
+fi
 
 magentaprint "Установка bind9..."
 apt install -y bind9 dnsutils
