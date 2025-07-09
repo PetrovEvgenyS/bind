@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Прерывать выполнение скрипта при любой ошибке
-# set -e
+set -e
 
 # Переменные
 ZONE="local"
@@ -55,6 +55,10 @@ EOF
 echo "Проверка конфигурации..."
 named-checkconf
 named-checkzone ${ZONE} ${ZONE_FILE}
+
+# Настройка разрешения DNS
+echo "Настройка /etc/resolv.conf..."
+sed -i "/^nameserver 127.0.0.53/i nameserver ${DNS_IP}" /etc/resolv.conf
 
 echo "Перезапуск BIND..."
 systemctl restart bind9
