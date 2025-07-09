@@ -9,10 +9,22 @@ ZONE_FILE="/etc/bind/db.${ZONE}"
 DNS_IP="10.100.10.251"        # IP BIND-сервера
 ALLOWED_NET="10.100.10.0/24"  # Разрешённая подсеть
 
-echo "Установка bind9..."
+### ЦВЕТА ##
+ESC=$(printf '\033') RESET="${ESC}[0m" MAGENTA="${ESC}[35m" RED="${ESC}[31m" GREEN="${ESC}[32m"
+
+### Функции цветного вывода ##
+magentaprint() { echo; printf "${MAGENTA}%s${RESET}\n" "$1"; }
+errorprint() { echo; printf "${RED}%s${RESET}\n" "$1"; }
+greenprint() { echo; printf "${GREEN}%s${RESET}\n" "$1"; }
+
+
+# ----------------------------------------------------------------------------------------------- #
+
+
+magentaprint "Установка bind9..."
 apt install -y bind9 dnsutils
 
-echo "Настройка /etc/bind/named.conf.options..."
+magentaprint "Настройка /etc/bind/named.conf.options..."
 cat <<EOF > /etc/bind/named.conf.options
 options {
     directory "/var/cache/bind";
@@ -25,7 +37,7 @@ options {
 };
 EOF
 
-echo "Настройка зоны в /etc/bind/named.conf.local..."
+magentaprint "Настройка зоны в /etc/bind/named.conf.local..."
 cat <<EOF > /etc/bind/named.conf.local
 zone "${ZONE}" {
     type master;
@@ -33,7 +45,7 @@ zone "${ZONE}" {
 };
 EOF
 
-echo "Создание файла зоны: ${ZONE_FILE}"
+magentaprint "Создание файла зоны: ${ZONE_FILE}"
 cat <<EOF > ${ZONE_FILE}
 \$TTL    86400
 @       IN      SOA     ns.${ZONE}. admin.${ZONE}. (
@@ -52,18 +64,18 @@ gitlab  IN      A       10.100.10.250
 app     IN      A       10.100.10.200
 EOF
 
-echo "Проверка конфигурации..."
+magentaprint "Проверка конфигурации..."
 named-checkconf
 named-checkzone ${ZONE} ${ZONE_FILE}
 
 # Настройка разрешения DNS
-echo "Настройка /etc/resolv.conf..."
+magentaprint "Настройка /etc/resolv.conf..."
 sed -i "/^nameserver 127.0.0.53/i nameserver ${DNS_IP}" /etc/resolv.conf
 
-echo "Перезапуск BIND..."
+magentaprint "Перезапуск BIND..."
 systemctl restart bind9
 
-echo "Готово! Проверь с клиента:"
+greenprint "Готово! Проверь с клиента:"
 echo "  dig @${DNS_IP} zabbix.${ZONE}"
 echo "  dig @${DNS_IP} gitlab.${ZONE}"
 echo "  dig @${DNS_IP} app.${ZONE}"
