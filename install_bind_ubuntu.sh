@@ -43,6 +43,19 @@ acl "ext" { 127.0.0.0/8; };
 acl "int" { 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16; };
 acl "mgmt" { 127.0.0.0/8; 10.100.10.0/24; };
 
+// DNS Key
+key "rndc-key" {
+    algorithm hmac-sha256;
+    secret "AZR8VALTYOBOG6C2j20EliWWnML1iSd+RJ2fpy0PN1I=";
+};
+
+// Control
+controls {
+    inet 127.0.0.1 port 953 allow { mgmt; } keys { "rndc-key"; };
+    inet 10.100.10.251 port 953 allow { mgmt; } keys { "rndc-key"; };
+};
+
+
 options {
     directory "/var/cache/bind";
     listen-on { any; };
