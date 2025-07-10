@@ -29,7 +29,7 @@ if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Пример: $0 10.100.10.251 10.100.10.0/24"
   echo "Где:"
   echo "  <DNS_IP> - IP-адрес сервера BIND"
-  echo "  <ALLOWED_NET> - Разрешённая подсеть для доступа к DNS"
+  echo "  <ALLOWED_NET> - Разрешённая подсеть для доступа к DNS"; echo
   exit 1
 fi
 
@@ -51,11 +51,13 @@ acl "ext" { 127.0.0.0/8; };
 acl "int" { 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16; };
 acl "mgmt" { 127.0.0.0/8; 10.100.10.0/24; };
 
+
 // DNS Key
 key "rndc-key" {
     algorithm hmac-sha256;
     secret "AZR8VALTYOBOG6C2j20EliWWnML1iSd+RJ2fpy0PN1I=";
 };
+
 
 // Control
 controls {
@@ -74,9 +76,58 @@ options {
     listen-on-v6 { none; };
 };
 
+
 // Включение статистики на интерфейсте
 statistics-channels {
     inet ${DNS_IP} port 80 allow { mgmt; };
+};
+
+
+// Логирование
+logging {
+    channel bind_log {
+        file "/var/log/named/named.log" versions 4 size 128m;
+        print-time yes;
+        print-category yes;
+        print-severity yes;
+    };
+
+    channel update_log {
+        file "/var/log/named/update.log" versions 4 size 128m;
+        print-time yes;
+        print-category yes;
+        print-severity yes;
+    };
+
+    channel xfer_log {
+        file "/var/log/named/xfer.log" versions 4 size 128m;
+        print-time yes;
+        print-category yes;
+        print-severity yes;
+    };
+
+    channel security_log {
+        file "/var/log/named/security.log" versions 4 size 128m;
+        print-time yes;
+        print-category yes;
+        print-severity yes;
+    };
+
+    channel query_log {
+        file "/var/log/named/query.log" versions 4 size 128m;
+        print-time yes;
+        print-category yes;
+        print-severity yes;
+    };
+
+    category default { bind_log; };
+    category xfer-in { xfer_log; };
+    category xfer-out { xfer_log; };
+    category update { update_log; };
+    category security { security_log; };
+    category queries { query_log; };
+    category lame-servers { null; };
+    category edns-disabled { bind_log; };
 };
 
 
