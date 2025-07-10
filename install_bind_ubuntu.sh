@@ -5,7 +5,7 @@ set -e
 
 # Переменные
 ZONE="local"
-ZONE_FILE="/etc/bind/db.${ZONE}"
+ZONE_FILE="/etc/bind/int/db.${ZONE}"
 DNS_IP="$1"              # IP BIND-сервера
 ALLOWED_NET="$2"         # Разрешённая подсеть
 
@@ -23,7 +23,7 @@ greenprint() { echo; printf "${GREEN}%s${RESET}\n" "$1"; }
 
 # Проверка наличия аргументов (IP-адрес DNS и разрешённая подсеть)
 if [ -z "$1" ] || [ -z "$2" ]; then
-  errorprint "Ошибка: Не указаны обязательные параметры."
+  errorprint "Ошибка: не указаны обязательные параметры."
   echo "Пожалуйста, укажите IP-адрес сервера BIND и разрешённую подсеть."
   echo "Использование: $0 <DNS_IP> <ALLOWED_NET>"
   echo "Пример: $0 10.100.10.251 10.100.10.0/24"
@@ -36,8 +36,16 @@ fi
 magentaprint "Установка bind9..."
 apt install -y bind9 dnsutils
 
-magentaprint "Настройка /etc/bind/named.conf.options..."
-cat <<EOF > /etc/bind/named.conf.options
+magentaprint "Удаление стандартных файлов bind9..."
+cd /etc/bind/
+rm -rf db.0 db.127 db.255 db.empty db.local named.conf.local named.conf.options named.conf.default-zones zones.rfc1918
+
+magentaprint "Создание необходимых директоиий для bind9..."
+mkdir dump ext int stats working /var/log/named
+chown -R bind:bind dump ext int stats working /var/log/named
+
+magentaprint "Настройка /etc/bind/named.conf..."
+cat <<EOF > /etc/bind/named.conf
 // ACL Data
 acl "ext" { 127.0.0.0/8; };
 acl "int" { 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16; };
@@ -70,10 +78,8 @@ options {
 statistics-channels {
     inet ${DNS_IP} port 80 allow { mgmt; };
 };
-EOF
 
-magentaprint "Настройка зоны в /etc/bind/named.conf.local..."
-cat <<EOF > /etc/bind/named.conf.local
+
 zone "${ZONE}" {
     type master;
     file "${ZONE_FILE}";
@@ -82,21 +88,24 @@ EOF
 
 magentaprint "Создание файла зоны: ${ZONE_FILE}"
 cat <<EOF > ${ZONE_FILE}
-\$TTL    86400
-@       IN      SOA     ns.${ZONE}. admin.${ZONE}. (
-                            2025070901  ; Serial
-                            604800      ; Refresh
-                            86400       ; Retry
-                            2419200     ; Expire
-                            86400 )     ; Negative Cache TTL
-;
-@       IN      NS      ns.${ZONE}.
-ns      IN      A       ${DNS_IP}
+\$TTL 600
+\$ORIGIN ${ZONE}.
+@                   IN  SOA dns01.${ZONE}. admin.${ZONE}.ru. (
+                            2025071001  ; Serial number
+                            600         ; Refresh
+                            60          ; Retry
+                            600         ; Expire
+                            600         ; Minimum
+                            )
+
+@                   IN  NS        dns01.${ZONE}.
+
+dns01               IN  A         ${DNS_IP}
 
 ; Локальные записи
-zabbix  IN      A       10.100.10.253
-gitlab  IN      A       10.100.10.250
-app     IN      A       10.100.10.200
+zabbix              IN  A         10.100.10.253
+gitlab              IN  A         10.100.10.250
+kvm                 IN  A         10.100.10.200
 EOF
 
 magentaprint "Проверка конфигурации..."
@@ -112,5 +121,4 @@ systemctl restart bind9
 
 greenprint "Готово! Проверь с клиента:"
 echo "  dig @${DNS_IP} zabbix.${ZONE}"
-echo "  dig @${DNS_IP} gitlab.${ZONE}"
-echo "  dig @${DNS_IP} app.${ZONE}"
+
