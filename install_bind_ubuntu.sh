@@ -44,12 +44,15 @@ chown -R bind:bind dump ext int stats working /var/log/named
 magentaprint "Настройка /etc/bind/named.conf..."
 cat <<EOF > /etc/bind/named.conf
 // ACL Data
+// Группировка IP-адресов для удобного управления доступом.
 acl "ext" { 127.0.0.0/8; };
 acl "int" { 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16; };
 acl "mgmt" { 127.0.0.0/8; 10.100.10.0/24; };
 
 
 // DNS Key
+// Для удалённое управление BIND через утилиту rndc.
+// Используется в секции controls.
 key "rndc-key" {
     algorithm hmac-sha256;
     secret "AZR8VALTYOBOG6C2j20EliWWnML1iSd+RJ2fpy0PN1I=";
@@ -57,24 +60,38 @@ key "rndc-key" {
 
 
 // Control
+// Разрешаем подключение к BIND для управления по интерфейсам из mgmt-сети:
 controls {
     inet 127.0.0.1 port 953 allow { mgmt; } keys { "rndc-key"; };
     inet 10.100.10.251 port 953 allow { mgmt; } keys { "rndc-key"; };
 };
 
 
+// Основные настройки
 options {
-    directory "/var/cache/bind";
-    listen-on { any; };
-    allow-query { localhost; ${ALLOWED_NET}; };
-    recursion yes;
-    dnssec-validation no;
-    auth-nxdomain no;
-    listen-on-v6 { none; };
+    directory "/etc/bind/working";                  // Рабочая директория
+    pid-file "/var/run/named/named.pid";            // Файл PID
+    dump-file "/etc/bind/dump/named_dump.db";       // Дамп кэша
+    statistics-file "/etc/bind/stats/named.stats";  // Статистика
+    bindkeys-file "/etc/bind/bind.keys";            // DNSSEC-ключи
+
+    empty-zones-enable no;                          // Не создавать пустые зоны
+    notify no;                                      // Отключить уведомления slaves
+
+    recursion no;                                   // Глобально запрещаем рекурсию
+    allow-recursion { none; };                      // Дополнительная страховка
+    allow-query { any; };                           // Запросы разрешены от всех
+
+    dnssec-validation yes;                          // Валидация DNSSEC
+    max-cache-size 1024m;                           // Лимит кэша
+    allow-transfer { ext; int; mgmt; };             // Кто может запрашивать трансфер зон
+
+    listen-on { any; };                             // Слушать на всех интерфейсах IPv4
+    listen-on-v6 { any; };                          // И IPv6
 };
 
 
-// Включение статистики на интерфейсте
+// Включение веб-статистики на порту 80
 statistics-channels {
     inet ${DNS_IP} port 80 allow { mgmt; };
 };
@@ -128,9 +145,9 @@ logging {
 };
 
 
-// Internal View for trusted networks
+// Internal view section
 view "int-in" {
-    match-clients { int; mgmt; };
+    match-clients { int; };
     recursion yes;
     allow-recursion { int; mgmt; };
 
