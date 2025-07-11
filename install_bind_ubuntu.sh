@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Прерывать выполнение скрипта при любой ошибке
-set -e
-
 # Переменные
 ZONE="local"
 ZONE_FILE="/etc/bind/int/db.${ZONE}"
@@ -131,9 +128,23 @@ logging {
 };
 
 
-zone "${ZONE}" {
-    type master;
-    file "${ZONE_FILE}";
+// Internal View for trusted networks
+view "int-in" {
+    match-clients { int; mgmt; };
+    recursion yes;
+    allow-recursion { int; mgmt; };
+
+    // Root zone
+    zone "." {
+        type hint;
+        file "/etc/bind/named.root";
+    };
+
+    // Zone for local domain
+    zone "${ZONE}" {
+        type master;
+        file "${ZONE_FILE}";
+    };
 };
 EOF
 
@@ -158,6 +169,16 @@ zabbix              IN  A         10.100.10.253
 gitlab              IN  A         10.100.10.250
 kvm                 IN  A         10.100.10.200
 EOF
+
+
+magentaprint "Создание файла named.root"
+magentaprint "Загрузка актуального named.root..."
+wget -O /etc/bind/named.root https://www.internic.net/domain/named.root || \
+    errorprint "Не удалось загрузить named.root с https://www.internic.net/domain/named.root"
+    magentaprint "Скопирйте named.root с GitHub в /etc/bind/named.root и перезагрузите bind9:"
+    magentaprint "https://github.com/PetrovEvgenyS/bind/blob/main/named.root"
+    
+
 
 magentaprint "Проверка конфигурации..."
 named-checkconf
