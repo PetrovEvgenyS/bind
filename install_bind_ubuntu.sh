@@ -1,10 +1,14 @@
 #!/bin/bash
 
 # Переменные
+DNS_ROLE="$1"
+DNS_IP_MASTER="$2"
+DNS_IP_SLAVE="$3"
+ALLOWED_NET="$4"
+DNS_NAME_MASTER="dns01"
+DNS_NAME_SLAVE="dns02"
 ZONE="local"
 ZONE_FILE="/etc/bind/int/db.${ZONE}"
-DNS_IP="$1"              # IP BIND-сервера
-ALLOWED_NET="$2"         # Разрешённая подсеть
 
 ### ЦВЕТА ##
 ESC=$(printf '\033') RESET="${ESC}[0m" MAGENTA="${ESC}[35m" RED="${ESC}[31m" GREEN="${ESC}[32m"
@@ -19,13 +23,15 @@ greenprint() { echo; printf "${GREEN}%s${RESET}\n" "$1"; }
 
 
 # Проверка наличия аргументов (IP-адрес DNS и разрешённая подсеть)
-if [ -z "$1" ] || [ -z "$2" ]; then
-  errorprint "Ошибка: не указаны обязательные параметры."
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
+  errorprint "Ошибка: Не указаны обязательные параметры."
   echo "Пожалуйста, укажите IP-адрес сервера BIND и разрешённую подсеть."
-  echo "Использование: $0 <DNS_IP> <ALLOWED_NET>"
-  echo "Пример: $0 10.100.10.251 10.100.10.0/24"
+  echo "Использование: $0 <DNS_ROLE> <DNS_IP_MASTER> <DNS_IP_SLAVE> <ALLOWED_NET>"
+  echo "Пример: $0 MASTER 10.100.10.251 10.100.10.252 10.100.10.0/24"
   echo "Где:"
-  echo "  <DNS_IP> - IP-адрес сервера BIND"
+  echo "  <DNS_ROLE> - Роль DNS-сервера (MASTER или SLAVE)"
+  echo "  <DNS_IP_MASTER> - IP-адрес сервера BIND MASTER"
+  echo "  <DNS_IP_SLAVE> - IP-адрес сервера BIND SLAVE"
   echo "  <ALLOWED_NET> - Разрешённая подсеть для доступа к DNS"; echo
   exit 1
 fi
@@ -47,7 +53,7 @@ cat <<EOF > /etc/bind/named.conf
 // Группировка IP-адресов для удобного управления доступом.
 acl "ext" { 127.0.0.0/8; };
 acl "int" { 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16; };
-acl "mgmt" { 127.0.0.0/8; 10.100.10.0/24; };
+acl "mgmt" { 127.0.0.0/8; ${ALLOWED_NET}; };
 
 
 // DNS Key
@@ -63,7 +69,7 @@ key "rndc-key" {
 // Разрешаем подключение к BIND для управления по интерфейсам из mgmt-сети:
 controls {
     inet 127.0.0.1 port 953 allow { mgmt; } keys { "rndc-key"; };
-    inet 10.100.10.251 port 953 allow { mgmt; } keys { "rndc-key"; };
+    inet $( [ "$DNS_ROLE" = "MASTER" ] && echo "$DNS_IP_MASTER" || echo "$DNS_IP_SLAVE" ) port 953 allow { mgmt; } keys { "rndc-key"; };
 };
 
 
@@ -93,7 +99,7 @@ options {
 
 // Включение веб-статистики на порту 80
 statistics-channels {
-    inet ${DNS_IP} port 80 allow { mgmt; };
+    inet $( [ "$DNS_ROLE" = "MASTER" ] && echo "$DNS_IP_MASTER" || echo "$DNS_IP_SLAVE" ) port 80 allow { mgmt; };
 };
 
 
@@ -149,7 +155,7 @@ logging {
 view "int-in" {
     match-clients { int; };
     recursion yes;
-    allow-recursion { int; mgmt; };
+    allow-recursion { int; };
 
     // Root zone
     zone "." {
@@ -159,55 +165,65 @@ view "int-in" {
 
     // Zone for local domain
     zone "${ZONE}" {
-        type master;
+        type $( [ "${DNS_ROLE}" = "MASTER" ] && echo master || echo slave );
         file "${ZONE_FILE}";
+$( [ "${DNS_ROLE}" = "MASTER" ] && echo -e "        notify yes;\n        also-notify { $DNS_IP_SLAVE; };\n        allow-update { mgmt; };" )
+$( [ "${DNS_ROLE}" = "SLAVE" ] && echo "        masters { $DNS_IP_MASTER; };" )
     };
 };
 EOF
 
-magentaprint "Создание файла зоны: ${ZONE_FILE}"
-cat <<EOF > ${ZONE_FILE}
+if [ "${DNS_ROLE}" = "MASTER" ]; then
+  magentaprint "Создание файла зоны: ${ZONE_FILE}"
+  cat <<EOF > ${ZONE_FILE}
 \$TTL 600
 \$ORIGIN ${ZONE}.
-@                   IN  SOA dns01.${ZONE}. admin.${ZONE}.ru. (
-                            2025071001  ; Serial number
+@                   IN  SOA ${DNS_NAME_MASTER}.${ZONE}. admin.${ZONE}.ru. (
+                            2025071101  ; Serial number
                             600         ; Refresh
                             60          ; Retry
                             600         ; Expire
                             600         ; Minimum
                             )
 
-@                   IN  NS        dns01.${ZONE}.
+@                   IN  NS        ${DNS_NAME_MASTER}.${ZONE}.
+@                   IN  NS        ${DNS_NAME_SLAVE}.${ZONE}.
 
-dns01               IN  A         ${DNS_IP}
+${DNS_NAME_MASTER}               IN  A         ${DNS_IP_MASTER}
+${DNS_NAME_SLAVE}               IN  A         ${DNS_IP_SLAVE}
 
 ; Локальные записи
-zabbix              IN  A         10.100.10.253
-gitlab              IN  A         10.100.10.250
-kvm                 IN  A         10.100.10.200
+zabbix                          IN  A         10.100.10.253
+gitlab                          IN  A         10.100.10.250
+kvm                             IN  A         10.100.10.200
 EOF
+fi
 
 
 magentaprint "Создание файла named.root"
 magentaprint "Загрузка актуального named.root..."
 wget -O /etc/bind/named.root https://www.internic.net/domain/named.root || \
-    errorprint "Не удалось загрузить named.root с https://www.internic.net/domain/named.root"
-    magentaprint "Скопирйте named.root с GitHub в /etc/bind/named.root и перезагрузите bind9:"
+    errorprint "Не удалось загрузить named.root с https://www.internic.net/domain/named.root" \
+    magentaprint "Скопирйте named.root с GitHub в /etc/bind/named.root и перезагрузите bind9:" \
     magentaprint "https://github.com/PetrovEvgenyS/bind/blob/main/named.root"
-    
 
 
 magentaprint "Проверка конфигурации..."
 named-checkconf
-named-checkzone ${ZONE} ${ZONE_FILE}
+if [ "${DNS_ROLE}" = "MASTER" ]; then
+  named-checkzone ${ZONE} ${ZONE_FILE}
+fi
 
 # Настройка разрешения DNS
 magentaprint "Настройка /etc/resolv.conf..."
-sed -i "/^nameserver 127.0.0.53/i nameserver ${DNS_IP}" /etc/resolv.conf
+# Добавляем оба DNS-сервера перед 127.0.0.53
+sed -i "/^nameserver 127.0.0.53/i nameserver ${DNS_IP_MASTER}\nnameserver ${DNS_IP_SLAVE}" /etc/resolv.conf
+
 
 magentaprint "Перезапуск BIND..."
 systemctl restart bind9
 
 greenprint "Готово! Проверь с клиента:"
-echo "  dig @${DNS_IP} zabbix.${ZONE}"
+echo "  dig @${DNS_IP_MASTER} zabbix.${ZONE}"
+echo "  dig @${DNS_IP_SLAVE} zabbix.${ZONE}"
 
