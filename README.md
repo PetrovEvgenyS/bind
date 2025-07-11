@@ -25,3 +25,7 @@ sudo ./install_bind_ubuntu.sh 10.100.10.251 10.100.10.0/24
 - Добавляет ваш сервер в /etc/resolv.conf
 - Перезапускает сервис BIND
 
+## named.root
+- Используйте в случае, если не работает сайт: `https://www.internic.net/domain/named.root`
+- last update: June 26, 2025
+
