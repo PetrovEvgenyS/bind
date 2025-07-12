@@ -214,6 +214,23 @@ wget -O /etc/bind/named.root https://www.internic.net/domain/named.root || \
     magentaprint "https://github.com/PetrovEvgenyS/bind/blob/main/named.root"
 
 
+magentaprint "Создание файла rndc.conf..."
+cat <<EOF > /etc/bind/rndc.conf
+# Start of rndc.conf
+key "rndc-key" {
+    algorithm hmac-sha256;
+    secret "AZR8VALTYOBOG6C2j20EliWWnML1iSd+RJ2fpy0PN1I=";
+};
+
+options {
+    default-key "rndc-key";
+    default-server 127.0.0.1;
+    default-port 953;
+};
+# End of rndc.conf
+EOF
+
+
 magentaprint "Проверка конфигурации..."
 named-checkconf
 if [ "${DNS_ROLE}" = "MASTER" ]; then
