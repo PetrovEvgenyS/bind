@@ -179,7 +179,7 @@ if [ "${DNS_ROLE}" = "MASTER" ]; then
 \$TTL 600
 \$ORIGIN ${ZONE}.
 @                   IN  SOA ${DNS_NAME_MASTER}.${ZONE}. admin.${ZONE}.ru. (
-                            2025071101  ; Serial number
+                            2025071201  ; Serial number
                             600         ; Refresh
                             60          ; Retry
                             600         ; Expire
@@ -196,6 +196,12 @@ ${DNS_NAME_SLAVE}               IN  A         ${DNS_IP_SLAVE}
 zabbix                          IN  A         10.100.10.253
 gitlab                          IN  A         10.100.10.250
 kvm                             IN  A         10.100.10.200
+node-vm01                       IN  A         10.100.10.1
+node-vm02                       IN  A         10.100.10.2
+node-vm03                       IN  A         10.100.10.3
+node-vm04                       IN  A         10.100.10.4
+node-vm05                       IN  A         10.100.10.5
+node-vm06                       IN  A         10.100.10.6
 EOF
 fi
 
