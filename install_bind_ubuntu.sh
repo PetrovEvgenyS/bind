@@ -153,9 +153,9 @@ logging {
 
 // Internal view section
 view "int-in" {
-    match-clients { int; };
+    match-clients { int; mgmt; };
     recursion yes;
-    allow-recursion { int; };
+    allow-recursion { int; mgmt; };
 
     // Root zone
     zone "." {
