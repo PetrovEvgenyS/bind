@@ -40,3 +40,6 @@ sudo ./install_bind_ubuntu.sh SLAVE 10.100.10.251 10.100.10.252 10.100.10.0/24
 - Используйте в случае, если не работает сайт: `https://www.internic.net/domain/named.root`
 - last update: June 26, 2025
 
+## statistics
+
+- Содержит скрипты на python для парсинга логов.
